@@ -7,17 +7,35 @@ import Gallery from './components/Gallery';
 import AuthScreen from './components/AuthScreen';
 import HelpModal from './components/HelpModal';
 import UserProfile from './components/UserProfile';
-import { generateStory, generateVideo, generateMusic, extractCharacters, generateCharacterImage } from './services/geminiService';
+import StoryDetailModal from './components/StoryDetailModal';
+import { generateStory, generateVideo, generateMusic, extractCharacters, generateCharacterImage, generateTitle, generateBackgroundImage } from './services/geminiService';
 import { StarIcon, SettingsIcon, MagicWandIcon, GalleryIcon, HelpIcon } from './components/IconComponents';
 
-type Theme = 'starlight' | 'enchanted-forest' | 'celestial-dawn';
+type Theme = 'starlight' | 'enchanted-forest' | 'celestial-dawn' | 'cyberpunk-neon' | 'mystic-forest';
 export type StoryLength = 'short' | 'medium' | 'long';
 export type ImageStyle = 'Vibrant' | 'Photo-Realistic' | 'Fantasy Art' | 'Anime';
 export type View = 'create' | 'gallery';
 
+export interface Comment {
+  id: number;
+  author: string;
+  text: string;
+  createdAt: string; // ISO string
+}
+
+export interface CommunityStory {
+  id: number;
+  title: string;
+  creator: string;
+  content: string;
+  votes: number;
+  comments: Comment[];
+  backgroundImageUrl?: string;
+}
 export interface Character {
   name: string;
   description: string;
+  backstory: string;
   imageUrl?: string;
   isImageLoading: boolean;
 }
@@ -26,6 +44,8 @@ const themes: { name: Theme; label: string; from: string, to: string }[] = [
     { name: 'starlight', label: 'Starlight', from: 'from-purple-500', to: 'to-pink-500' },
     { name: 'enchanted-forest', label: 'Enchanted Forest', from: 'from-emerald-500', to: 'to-green-400' },
     { name: 'celestial-dawn', label: 'Celestial Dawn', from: 'from-orange-500', to: 'to-amber-400' },
+    { name: 'cyberpunk-neon', label: 'Cyberpunk Neon', from: 'from-pink-500', to: 'to-cyan-400' },
+    { name: 'mystic-forest', label: 'Mystic Forest', from: 'from-amber-600', to: 'to-green-700' },
 ];
 
 const App: React.FC = () => {
@@ -43,6 +63,11 @@ const App: React.FC = () => {
   
   // Modal State
   const [showHelpModal, setShowHelpModal] = useState(false);
+  
+  // State for background image generation
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [isBgImageLoading, setIsBgImageLoading] = useState<boolean>(false);
+  const [bgImageError, setBgImageError] = useState<string | null>(null);
 
   // State for video generation
   const [isVideoLoading, setIsVideoLoading] = useState<boolean>(false);
@@ -62,6 +87,13 @@ const App: React.FC = () => {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [characterError, setCharacterError] = useState<string | null>(null);
 
+  // Community Showcase State
+  const [communityStories, setCommunityStories] = useState<CommunityStory[]>([]);
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [isPublished, setIsPublished] = useState<boolean>(false);
+  const [selectedStory, setSelectedStory] = useState<CommunityStory | null>(null);
+
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('story-weaver-theme') as Theme | null;
@@ -69,6 +101,31 @@ const App: React.FC = () => {
       setTheme(savedTheme);
     }
   }, []);
+  
+  // Load community stories from localStorage on initial render
+  useEffect(() => {
+    const savedStories = localStorage.getItem('story-weaver-gallery');
+    if (savedStories) {
+      try {
+        const parsedStories = JSON.parse(savedStories);
+        // Ensure every story has a comments array for backward compatibility
+        const storiesWithComments = parsedStories.map((story: any) => ({
+            ...story,
+            comments: story.comments || []
+        }));
+        setCommunityStories(storiesWithComments);
+      } catch (e) {
+        console.error("Failed to parse community stories from localStorage", e);
+        setCommunityStories([]);
+      }
+    }
+  }, []);
+
+  // Persist community stories to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('story-weaver-gallery', JSON.stringify(communityStories));
+  }, [communityStories]);
+
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -85,12 +142,19 @@ const App: React.FC = () => {
   };
 
   const handleGenerateStory = useCallback(async (prompt: string, length: StoryLength, image?: { mimeType: string; data: string; }) => {
-    if (!prompt.trim() || isLoading) return;
+    if (!prompt.trim()) return;
 
+    // Reset all states for a new creation
     setIsLoading(true);
     setError(null);
     setStory('');
+    setIsPublished(false);
+    setPublishError(null);
     
+    setBackgroundImageUrl(null);
+    setIsBgImageLoading(true); // Start background loading process
+    setBgImageError(null);
+
     setVideoUrl('');
     setSceneImages([]);
     setVideoError(null);
@@ -108,15 +172,77 @@ const App: React.FC = () => {
 
 
     try {
-      const result = await generateStory(prompt, length, image);
-      setStory(result);
+      // Step 1: Generate the story text
+      const storyResult = await generateStory(prompt, length, image);
+      setStory(storyResult);
+      setIsLoading(false); // Story loading is complete
+
+      // Step 2: Generate the background image using the new story
+      try {
+        const imageUrl = await generateBackgroundImage(storyResult);
+        setBackgroundImageUrl(imageUrl);
+      } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+          setBgImageError(`Could not generate the background. ${errorMessage}`);
+          console.error(err);
+      } finally {
+          setIsBgImageLoading(false); // Background loading is complete
+      }
     } catch (err) {
       setError('An enchanting tale could not be woven. Please try again.');
       console.error(err);
-    } finally {
+      // Ensure all loaders are turned off if story generation fails
       setIsLoading(false);
+      setIsBgImageLoading(false);
     }
-  }, [isLoading]);
+  }, []);
+
+  const handlePublishStory = useCallback(async () => {
+    if (!story || !user || isPublishing || isPublished) return;
+
+    setIsPublishing(true);
+    setPublishError(null);
+    try {
+      const title = await generateTitle(story);
+      const newStory: CommunityStory = {
+        id: Date.now(),
+        title,
+        creator: user.name,
+        content: story,
+        votes: 0,
+        comments: [],
+        backgroundImageUrl,
+      };
+
+      setCommunityStories(prevStories => [newStory, ...prevStories]);
+      setIsPublished(true);
+
+    } catch (err) {
+      setPublishError("Could not publish the story. The magic might be weak today.");
+      console.error(err);
+    } finally {
+      setIsPublishing(false);
+    }
+
+  }, [story, user, isPublishing, isPublished, backgroundImageUrl]);
+  
+  const handleGenerateBackgroundImage = useCallback(async () => {
+      if (!story || isBgImageLoading) return;
+      setIsBgImageLoading(true);
+      setBgImageError(null);
+
+      try {
+          const imageUrl = await generateBackgroundImage(story);
+          setBackgroundImageUrl(imageUrl);
+      } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+          setBgImageError(`Could not generate the background. ${errorMessage}`);
+          console.error(err);
+      } finally {
+          setIsBgImageLoading(false);
+      }
+  }, [story, isBgImageLoading]);
+
 
   const handleGenerateVideo = useCallback(async () => {
     if (!story || isVideoLoading) return;
@@ -194,9 +320,42 @@ const App: React.FC = () => {
       }
   }, [characters]);
 
+    const handleSelectStory = (story: CommunityStory) => {
+        setSelectedStory(story);
+    };
+
+    const handleCloseStoryModal = () => {
+        setSelectedStory(null);
+    };
+
+    const handleAddComment = (storyId: number, commentText: string) => {
+        if (!user) return; 
+
+        const newComment: Comment = {
+            id: Date.now(),
+            author: user.name,
+            text: commentText,
+            createdAt: new Date().toISOString(),
+        };
+
+        const updatedStories = communityStories.map(story =>
+            story.id === storyId
+                ? { ...story, comments: [...story.comments, newComment] }
+                : story
+        );
+        setCommunityStories(updatedStories);
+        
+        // Also update the selected story in the modal
+        if (selectedStory && selectedStory.id === storyId) {
+            setSelectedStory(prev => prev ? {...prev, comments: [...prev.comments, newComment]} : null);
+        }
+    };
+
   if (!user) {
     return <AuthScreen onLogin={handleLogin} />;
   }
+  
+  const isGenerating = isLoading || isBgImageLoading;
 
   return (
     <>
@@ -271,14 +430,18 @@ const App: React.FC = () => {
           {view === 'create' ? (
               <main className="w-full flex-grow flex flex-col items-center">
                 <div className="w-full max-w-2xl p-6 bg-[var(--color-panel-bg)] backdrop-blur-md rounded-2xl shadow-2xl shadow-[var(--color-shadow)] border border-[var(--color-border)] mb-8 animate-fade-in-up">
-                  <StoryInput onSubmit={handleGenerateStory} isLoading={isLoading} />
+                  <StoryInput onSubmit={handleGenerateStory} isLoading={isGenerating} />
                 </div>
 
-                <div className="w-full max-w-3xl flex-grow animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                <div className="w-full max-w-4xl flex-grow animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
                   <StoryDisplay 
                     story={story} 
                     isLoading={isLoading} 
                     error={error} 
+                    backgroundImageUrl={backgroundImageUrl}
+                    onGenerateBackgroundImage={handleGenerateBackgroundImage}
+                    isBgImageLoading={isBgImageLoading}
+                    bgImageError={bgImageError}
                     characters={characters}
                     onGenerateVideo={handleGenerateVideo}
                     isVideoLoading={isVideoLoading}
@@ -291,6 +454,10 @@ const App: React.FC = () => {
                     musicUrl={musicUrl}
                     musicError={musicError}
                     musicLoadingMessage={musicLoadingMessage}
+                    onPublishStory={handlePublishStory}
+                    isPublishing={isPublishing}
+                    publishError={publishError}
+                    isPublished={isPublished}
                   >
                       <CharacterGenerator
                           onGenerateCharacters={handleGenerateCharacters}
@@ -303,7 +470,7 @@ const App: React.FC = () => {
                 </div>
               </main>
           ) : (
-              <Gallery />
+              <Gallery stories={communityStories} setStories={setCommunityStories} onSelectStory={handleSelectStory} />
           )}
           
           <footer className="mt-12 text-center text-[var(--color-text-muted)] text-sm">
@@ -312,6 +479,14 @@ const App: React.FC = () => {
         </div>
       </div>
       {showHelpModal && <HelpModal onClose={() => setShowHelpModal(false)} />}
+      {selectedStory && user && (
+        <StoryDetailModal
+          story={selectedStory}
+          user={user}
+          onClose={handleCloseStoryModal}
+          onAddComment={handleAddComment}
+        />
+      )}
     </>
   );
 };

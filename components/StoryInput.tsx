@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { MagicWandIcon, UploadIcon } from './IconComponents';
+import React, { useState, useCallback, useEffect } from 'react';
+import { MagicWandIcon, UploadIcon, ShuffleIcon } from './IconComponents';
 import { StoryLength } from '../App';
 
 interface StoryInputProps {
@@ -12,6 +12,19 @@ const storyLengths: { id: StoryLength; label: string }[] = [
     { id: 'medium', label: 'Medium' },
     { id: 'long', label: 'Long' },
 ];
+
+const inspirationPrompts = [
+    "A librarian who discovers a book that writes itself.",
+    "A clockmaker who can control time, but only for five minutes a day.",
+    "An astronaut finds a mysterious, glowing seed on a distant planet.",
+    "A chef whose food allows people to relive their happiest memories.",
+    "Two rival magicians must team up to save their city from a magical plague.",
+    "A lighthouse keeper on a remote island receives messages in bottles from the future.",
+    "A child befriends a gentle giant made of starlight and moonbeams.",
+    "A detective in a city powered by dreams must solve a case of stolen nightmares.",
+    "A cartographer finds a map that changes as the world does.",
+];
+
 
 const fileToGenerativePart = async (file: File) => {
     const base64EncodedDataPromise = new Promise<string>((resolve) => {
@@ -30,6 +43,16 @@ const StoryInput: React.FC<StoryInputProps> = ({ onSubmit, isLoading }) => {
   const [storyLength, setStoryLength] = useState<StoryLength>('medium');
   const [customCharacterName, setCustomCharacterName] = useState('');
   const [customCharacterFile, setCustomCharacterFile] = useState<File | null>(null);
+  const [displayedPrompts, setDisplayedPrompts] = useState<string[]>([]);
+
+  const shufflePrompts = useCallback(() => {
+    const shuffled = [...inspirationPrompts].sort(() => 0.5 - Math.random());
+    setDisplayedPrompts(shuffled.slice(0, 3));
+  }, []);
+
+  useEffect(() => {
+    shufflePrompts();
+  }, [shufflePrompts]);
 
   const handlePresetClick = (presetPrompt: string) => {
     setPrompt(presetPrompt);
@@ -91,8 +114,38 @@ const StoryInput: React.FC<StoryInputProps> = ({ onSubmit, isLoading }) => {
               Use Mythic Preset
           </button>
       </div>
+
+      <div className="mt-6 text-left">
+        <div className="flex justify-between items-center mb-3">
+            <h3 className="text-lg font-semibold text-[var(--color-text-secondary)]">
+                Need Inspiration?
+            </h3>
+            <button
+                type="button"
+                onClick={shufflePrompts}
+                className="p-2 rounded-full text-[var(--color-text-tertiary)] hover:bg-white/10 transition-colors"
+                aria-label="Shuffle prompts"
+                disabled={isLoading}
+            >
+                <ShuffleIcon className="w-5 h-5" />
+            </button>
+        </div>
+        <div className="flex flex-col space-y-2">
+            {displayedPrompts.map((promptText, index) => (
+                <button
+                    key={index}
+                    type="button"
+                    onClick={() => setPrompt(promptText)}
+                    className="w-full p-3 text-left text-sm text-[var(--color-text-tertiary)] bg-black/20 rounded-lg hover:bg-white/10 hover:text-[var(--color-text-primary)] transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isLoading}
+                >
+                    {promptText}
+                </button>
+            ))}
+        </div>
+      </div>
       
-      <div className="mt-4 text-left">
+      <div className="mt-6 text-left">
           <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
             Story Length
           </label>

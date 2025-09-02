@@ -1,7 +1,9 @@
+
+
 import React, { useRef, useEffect, useState } from 'react';
 import JSZip from 'jszip';
 import Loader from './Loader';
-import { VideoIcon, DownloadIcon, ShareIcon, MusicIcon, FolderDownloadIcon, RegenerateIcon } from './IconComponents';
+import { VideoIcon, DownloadIcon, ShareIcon, MusicIcon, FolderDownloadIcon, RegenerateIcon, PublishIcon, LandscapeIcon } from './IconComponents';
 import { Character } from '../App';
 
 
@@ -9,6 +11,10 @@ interface StoryDisplayProps {
   story: string;
   isLoading: boolean;
   error: string | null;
+  backgroundImageUrl: string | null;
+  onGenerateBackgroundImage: () => void;
+  isBgImageLoading: boolean;
+  bgImageError: string | null;
   characters: Character[];
   onGenerateVideo: () => void;
   isVideoLoading: boolean;
@@ -21,6 +27,10 @@ interface StoryDisplayProps {
   musicUrl: string;
   musicError: string | null;
   musicLoadingMessage: string;
+  onPublishStory: () => void;
+  isPublishing: boolean;
+  publishError: string | null;
+  isPublished: boolean;
   children: React.ReactNode; // For CharacterGenerator
 }
 
@@ -28,6 +38,10 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
     story, 
     isLoading, 
     error,
+    backgroundImageUrl,
+    onGenerateBackgroundImage,
+    isBgImageLoading,
+    bgImageError,
     characters,
     onGenerateVideo,
     isVideoLoading,
@@ -40,6 +54,10 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
     musicUrl,
     musicError,
     musicLoadingMessage,
+    onPublishStory,
+    isPublishing,
+    publishError,
+    isPublished,
     children,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -98,6 +116,17 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
     document.body.removeChild(link);
   };
   
+  const handleDownloadMusic = () => {
+    if (!musicUrl) return;
+    const fileName = `${getStoryPrefix()}_soundtrack_${Date.now()}.mp3`;
+    const link = document.createElement('a');
+    link.href = musicUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
   const handleDownloadScene = (e: React.MouseEvent, imageUrl: string, index: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -132,9 +161,19 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
           const zip = new JSZip();
           zip.file("story.txt", story);
 
+          if (backgroundImageUrl) {
+              const bgBlob = await fetch(backgroundImageUrl).then(res => res.blob());
+              zip.file("background.jpeg", bgBlob);
+          }
+
           if (videoUrl) {
               const videoBlob = await fetch(videoUrl).then(res => res.blob());
               zip.file("video.mp4", videoBlob);
+          }
+
+          if (musicUrl) {
+              const musicBlob = await fetch(musicUrl).then(res => res.blob());
+              zip.file("soundtrack.mp3", musicBlob);
           }
 
           if (sceneImages.length > 0) {
@@ -148,9 +187,10 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
           const charactersWithImages = characters.filter(c => c.imageUrl);
           if (charactersWithImages.length > 0) {
               const charactersFolder = zip.folder("characters");
-               await Promise.all(charactersWithImages.map(async (char) => {
+               await Promise.all(charactersWithImages.map(async (char, index) => {
                   const imgBlob = await fetch(char.imageUrl!).then(res => res.blob());
-                  const fileName = `${char.name.replace(/\s+/g, '_').toLowerCase()}.jpeg`;
+                  const safeName = char.name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_').toLowerCase();
+                  const fileName = `${safeName || `character_${index + 1}`}.jpeg`;
                   charactersFolder?.file(fileName, imgBlob);
               }));
           }
@@ -184,16 +224,25 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
       const paragraphs = story.split('\n').filter(p => p.trim() !== '');
       return (
         <div className="w-full">
-            <div className="relative mb-6">
+            <div className="relative mb-6 flex justify-end space-x-2">
+                 <button
+                    onClick={onPublishStory}
+                    disabled={isPublishing || isPublished}
+                    className="flex items-center justify-center px-3 py-1.5 font-semibold text-[var(--color-text-tertiary)] bg-white/5 rounded-lg shadow-sm hover:bg-white/10 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                >
+                    <PublishIcon className="w-5 h-5 mr-2" />
+                    {isPublishing ? 'Publishing...' : isPublished ? 'Published!' : 'Publish to Showcase'}
+                </button>
                 <button
                     onClick={handleDownloadAll}
                     disabled={isZipping}
-                    className="absolute -top-2 right-0 flex items-center justify-center px-3 py-1.5 font-semibold text-[var(--color-text-tertiary)] bg-white/5 rounded-lg shadow-sm hover:bg-white/10 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                    className="flex items-center justify-center px-3 py-1.5 font-semibold text-[var(--color-text-tertiary)] bg-white/5 rounded-lg shadow-sm hover:bg-white/10 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
                 >
                     <FolderDownloadIcon className="w-5 h-5 mr-2" />
                     {isZipping ? 'Packaging...' : 'Download All'}
                 </button>
             </div>
+            {publishError && <p className="text-red-400 text-center mb-4">{publishError}</p>}
             <div className="space-y-4 text-[var(--color-text-secondary)] leading-relaxed text-left">
                 {paragraphs.map((para, index) => (
                 <p key={index}>{para}</p>
@@ -202,10 +251,44 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
 
             <div className="mt-8 pt-6 border-t border-[var(--color-border)]">
                 <h2 className="text-xl font-bold text-center text-[var(--color-text-secondary)] mb-6">Creative Tools</h2>
-                <div className="grid md:grid-cols-3 gap-6 items-start">
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+                {/* Background Generation Column */}
+                <div className="flex flex-col items-center justify-start w-full h-full space-y-4">
+                    {isBgImageLoading ? (
+                        <Loader message="Setting the scene..." />
+                    ) : backgroundImageUrl ? (
+                        <div className="w-full text-center">
+                            <h3 className="text-lg font-semibold mb-4 text-[var(--color-text-secondary)]">Story Background</h3>
+                            <img src={backgroundImageUrl} alt="Story background" className="w-full rounded-lg shadow-lg aspect-video object-cover" />
+                            <button
+                                onClick={onGenerateBackgroundImage}
+                                disabled={isBgImageLoading}
+                                className="w-full max-w-xs mx-auto mt-4 flex items-center justify-center px-6 py-2 font-semibold text-white bg-gradient-to-r from-purple-500/80 to-indigo-500/80 rounded-lg shadow-md hover:from-purple-500 hover:to-indigo-500 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                            >
+                                <RegenerateIcon className="w-5 h-5 mr-2" />
+                                Regenerate
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-xs mx-auto">
+                            {bgImageError && <p className="text-red-400 text-center">{bgImageError}</p>}
+                            <button
+                                onClick={onGenerateBackgroundImage}
+                                disabled={isBgImageLoading}
+                                className="w-full flex items-center justify-center px-6 py-3 font-bold text-white bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg shadow-lg hover:shadow-indigo-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                            >
+                                <LandscapeIcon className="w-5 h-5 mr-2" />
+                                {bgImageError ? 'Retry Background' : 'Generate Background'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+                
                 {/* Video Generation Column */}
                 <div className="flex flex-col items-center justify-start w-full h-full space-y-4">
-                    {videoUrl ? (
+                    {isVideoLoading ? (
+                        <Loader message={videoLoadingMessage} />
+                    ) : videoUrl ? (
                         <div className="w-full mx-auto space-y-6">
                             {sceneImages.length > 0 && (
                                 <div>
@@ -251,19 +334,29 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
                                 </div>
                             </div>
                         </div>
-                    ) : isVideoLoading ? (
-                        <Loader message={videoLoadingMessage} />
                     ) : videoError ? (
-                        <p className="text-red-400 text-center">{videoError}</p>
+                        <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-xs mx-auto">
+                            <p className="text-red-400 text-center">{videoError}</p>
+                            <button
+                                onClick={onGenerateVideo}
+                                disabled={isVideoLoading}
+                                className="w-full flex items-center justify-center px-6 py-3 font-bold text-white bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg shadow-lg hover:shadow-cyan-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                            >
+                                <RegenerateIcon className="w-5 h-5 mr-2" />
+                                Retry Video Clip
+                            </button>
+                        </div>
                     ) : (
-                        <button
-                            onClick={onGenerateVideo}
-                            disabled={isVideoLoading}
-                            className="w-full max-w-xs mx-auto flex items-center justify-center px-6 py-3 font-bold text-white bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg shadow-lg hover:shadow-cyan-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
-                        >
-                            <VideoIcon className="w-5 h-5 mr-2" />
-                            Generate Video Clip
-                        </button>
+                         <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-xs mx-auto">
+                            <button
+                                onClick={onGenerateVideo}
+                                disabled={isVideoLoading}
+                                className="w-full flex items-center justify-center px-6 py-3 font-bold text-white bg-gradient-to-r from-teal-500 to-cyan-500 rounded-lg shadow-lg hover:shadow-cyan-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                            >
+                                <VideoIcon className="w-5 h-5 mr-2" />
+                                Generate Video Clip
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -271,8 +364,6 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
                 <div className="flex flex-col items-center justify-start w-full h-full space-y-4">
                     {isMusicLoading ? (
                         <Loader message={musicLoadingMessage} />
-                    ) : musicError ? (
-                        <p className="text-red-400 text-center">{musicError}</p>
                     ) : musicUrl ? (
                         <div className="w-full mx-auto text-center space-y-4">
                             <div>
@@ -289,24 +380,47 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
                                 )}
                                 <p className="text-xs text-[var(--color-text-muted)] mt-3">The generated video is yours to keep.<br/>The soundtrack is licensed to AI Story Weaver.</p>
                             </div>
+                            <div className="w-full max-w-xs mx-auto flex items-center space-x-2">
+                                <button
+                                    onClick={handleDownloadMusic}
+                                    className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg shadow-lg hover:shadow-emerald-500/50 transform hover:scale-105 transition-all duration-300"
+                                >
+                                    <DownloadIcon className="w-4 h-4 mr-2" />
+                                    Download
+                                </button>
+                                <button
+                                    onClick={onGenerateMusic}
+                                    disabled={isMusicLoading}
+                                    className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-rose-500/80 to-fuchsia-500/80 rounded-lg shadow-md hover:from-rose-500 hover:to-fuchsia-500 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                                >
+                                    <RegenerateIcon className="w-4 h-4 mr-2" />
+                                    Regenerate
+                                </button>
+                            </div>
+                        </div>
+                    ) : musicError ? (
+                        <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-xs mx-auto">
+                            <p className="text-red-400 text-center">{musicError}</p>
                             <button
                                 onClick={onGenerateMusic}
                                 disabled={isMusicLoading}
-                                className="w-full max-w-xs mx-auto flex items-center justify-center px-6 py-2 font-semibold text-white bg-gradient-to-r from-rose-500/80 to-fuchsia-500/80 rounded-lg shadow-md hover:from-rose-500 hover:to-fuchsia-500 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                                className="w-full flex items-center justify-center px-6 py-3 font-bold text-white bg-gradient-to-r from-rose-500 to-fuchsia-500 rounded-lg shadow-lg hover:shadow-fuchsia-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
                             >
                                 <RegenerateIcon className="w-5 h-5 mr-2" />
-                                Regenerate Soundtrack
+                                Retry Soundtrack
                             </button>
                         </div>
                     ) : (
-                        <button
-                            onClick={onGenerateMusic}
-                            disabled={isMusicLoading}
-                            className="w-full max-w-xs mx-auto flex items-center justify-center px-6 py-3 font-bold text-white bg-gradient-to-r from-rose-500 to-fuchsia-500 rounded-lg shadow-lg hover:shadow-fuchsia-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
-                        >
-                            <MusicIcon className="w-5 h-5 mr-2" />
-                            Generate Soundtrack
-                        </button>
+                         <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-xs mx-auto">
+                            <button
+                                onClick={onGenerateMusic}
+                                disabled={isMusicLoading}
+                                className="w-full flex items-center justify-center px-6 py-3 font-bold text-white bg-gradient-to-r from-rose-500 to-fuchsia-500 rounded-lg shadow-lg hover:shadow-fuchsia-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                            >
+                                <MusicIcon className="w-5 h-5 mr-2" />
+                                Generate Soundtrack
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -327,8 +441,14 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({
   };
 
   return (
-    <div className="w-full min-h-[300px] p-6 sm:p-8 bg-[var(--color-panel-bg)] backdrop-blur-md rounded-2xl shadow-inner shadow-black/20 border border-[var(--color-border)] flex items-center justify-center transition-all duration-500">
-      {renderContent()}
+    <div 
+        className="w-full min-h-[300px] p-6 sm:p-8 bg-[var(--color-panel-bg)] rounded-2xl shadow-inner shadow-black/20 border border-[var(--color-border)] flex items-center justify-center transition-all duration-500 relative bg-cover bg-center"
+        style={{ backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : 'none' }}
+    >
+        {backgroundImageUrl && <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-bg-from)]/80 via-[var(--color-bg-via)]/90 to-[var(--color-bg-to)]/80 backdrop-blur-sm rounded-2xl"></div>}
+        <div className="relative w-full h-full flex items-center justify-center">
+            {renderContent()}
+        </div>
     </div>
   );
 };

@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+
+import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse } from "@google/genai";
 import { StoryLength, ImageStyle } from "../App";
 
 const API_KEY = process.env.API_KEY;
@@ -55,7 +56,8 @@ export const generateStory = async (
     });
     
     try {
-        const response = await withRetry(apiCall, () => {});
+        // FIX: Add type assertion to correctly type the response from the API call.
+        const response = await withRetry(apiCall, () => {}) as GenerateContentResponse;
         return response.text;
     } catch (error) {
         console.error("Error generating story from Gemini API:", error);
@@ -65,6 +67,64 @@ export const generateStory = async (
         throw new Error("Failed to generate story. Please check the API configuration.");
     }
 };
+
+export const generateTitle = async (story: string): Promise<string> => {
+    const apiCall = () => ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Based on the following story, generate a short, catchy, and imaginative title (4-6 words max). Do not use quotation marks in the title. Story: "${story}"`,
+        config: {
+            temperature: 0.7,
+        },
+    });
+
+    try {
+        // FIX: Add type assertion to correctly type the response from the API call.
+        const response = await withRetry(apiCall, () => {}) as GenerateContentResponse;
+        return response.text.replace(/"/g, '').trim();
+    } catch (error) {
+        console.error("Error generating title from Gemini API:", error);
+        return "An Untitled Tale";
+    }
+};
+
+export const generateBackgroundImage = async (story: string): Promise<string> => {
+    const promptApiCall = () => ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Based on the following story, create a short, descriptive prompt for a beautiful, atmospheric background image. Focus on the setting, environment, and mood. Avoid mentioning characters. The prompt should be suitable for an AI image generator. Story: "${story}"`,
+        config: {
+            temperature: 0.6,
+        },
+    });
+
+    try {
+        // FIX: Add type assertion to correctly type the response from the API call.
+        const promptResponse = await withRetry(promptApiCall, () => {}) as GenerateContentResponse;
+        const imagePrompt = `${promptResponse.text}, beautiful digital painting, atmospheric, detailed, epic.`
+
+        const imageApiCall = () => ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: imagePrompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: '16:9',
+            },
+        });
+
+        // FIX: Add type assertion to correctly type the response from the API call.
+        const imageResponse = await withRetry(imageApiCall, () => {}) as GenerateImagesResponse;
+        const base64ImageBytes = imageResponse.generatedImages[0].image.imageBytes;
+        return `data:image/jpeg;base64,${base64ImageBytes}`;
+
+    } catch (error) {
+        console.error("Error generating background image from Gemini API:", error);
+        if (error instanceof Error && error.message.includes('high demand')) {
+            throw error;
+        }
+        throw new Error("Failed to generate background image.");
+    }
+};
+
 
 const base64Encode = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -206,10 +266,10 @@ export const generateMusic = async (
 };
 
 
-export const extractCharacters = async (story: string): Promise<{ name: string; description: string }[]> => {
+export const extractCharacters = async (story: string): Promise<{ name: string; description: string; backstory: string; }[]> => {
     const apiCall = () => ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: `Analyze the following story and identify up to 3 main characters. For each character, provide their name and a concise, one-sentence visual description suitable for an image generation prompt. Story: "${story}"`,
+        contents: `Analyze the following story and identify up to 3 main characters. For each character, provide their name, a concise one-sentence visual description suitable for an image generation prompt, and a brief 1-2 sentence backstory that complements the story's theme. Story: "${story}"`,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -227,6 +287,10 @@ export const extractCharacters = async (story: string): Promise<{ name: string; 
                                 description: {
                                     type: Type.STRING,
                                     description: "A short, visual description of the character."
+                                },
+                                backstory: {
+                                    type: Type.STRING,
+                                    description: "A brief, 1-2 sentence backstory for the character."
                                 }
                             }
                         }
@@ -237,7 +301,8 @@ export const extractCharacters = async (story: string): Promise<{ name: string; 
     });
 
     try {
-        const response = await withRetry(apiCall, () => {});
+        // FIX: Add type assertion to correctly type the response from the API call.
+        const response = await withRetry(apiCall, () => {}) as GenerateContentResponse;
         const json = JSON.parse(response.text);
         return json.characters || [];
     } catch (error) {
@@ -261,7 +326,8 @@ export const generateCharacterImage = async (description: string, style: ImageSt
     });
 
     try {
-        const response = await withRetry(apiCall, () => {});
+        // FIX: Add type assertion to correctly type the response from the API call.
+        const response = await withRetry(apiCall, () => {}) as GenerateImagesResponse;
         const base64ImageBytes = response.generatedImages[0].image.imageBytes;
         return `data:image/jpeg;base64,${base64ImageBytes}`;
     } catch (error) {
