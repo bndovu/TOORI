@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Story Weaver</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Poppins', sans-serif;
+      }
+      :root { /* Default: Starlight */
+        --color-bg-from: #0a001a;
+        --color-bg-via: #1a0033;
+        --color-bg-to: #2a004d;
+        --color-text-primary: #f9fafb; /* gray-50 */
+        --color-text-secondary: #c7d2fe; /* indigo-200 */
+        --color-text-tertiary: #a5b4fc; /* indigo-300 */
+        --color-text-muted: #a5b4fc80; /* indigo-300/50 */
+        --color-text-placeholder: #818cf880; /* indigo-400/50 */
+        --color-accent-from: #9333ea; /* purple-600 */
+        --color-accent-to: #db2777; /* pink-600 */
+        --color-header-from: #c084fc; /* purple-400 */
+        --color-header-to: #f472b6; /* pink-500 */
+        --color-icon-1: #c084fc; /* purple-400 */
+        --color-icon-2: #f9a8d4; /* pink-300 */
+        --color-border: #ffffff1a; /* white/10 */
+        --color-panel-bg: #ffffff0d; /* white/5 */
+        --color-shadow: #a855f71a; /* purple-500/10 */
+        --color-focus-ring: #a855f780; /* purple-500/50 */
+      }
+      [data-theme="enchanted-forest"] {
+        --color-bg-from: #062a1a;
+        --color-bg-via: #11422b;
+        --color-bg-to: #1a593d;
+        --color-text-primary: #f0fdfa; /* teal-50 */
+        --color-text-secondary: #ccfbf1; /* teal-100 */
+        --color-text-tertiary: #99f6e4; /* teal-200 */
+        --color-text-muted: #99f6e480;
+        --color-text-placeholder: #99f6e480;
+        --color-accent-from: #059669; /* emerald-600 */
+        --color-accent-to: #10b981; /* emerald-500 */
+        --color-header-from: #34d399; /* emerald-400 */
+        --color-header-to: #6ee7b7; /* emerald-300 */
+        --color-icon-1: #34d399;
+        --color-icon-2: #a7f3d0;
+        --color-border: #ffffff1a;
+        --color-panel-bg: #ffffff0d;
+        --color-shadow: #10b9811a;
+        --color-focus-ring: #10b98180;
+      }
+      [data-theme="celestial-dawn"] {
+        --color-bg-from: #4c1d95;
+        --color-bg-via: #c026d3;
+        --color-bg-to: #ea580c;
+        --color-text-primary: #fff7ed; /* orange-50 */
+        --color-text-secondary: #ffedd5; /* orange-100 */
+        --color-text-tertiary: #fed7aa; /* orange-200 */
+        --color-text-muted: #fed7aa80;
+        --color-text-placeholder: #fed7aa80;
+        --color-accent-from: #ea580c; /* orange-600 */
+        --color-accent-to: #fb923c; /* orange-400 */
+        --color-header-from: #fbbf24; /* amber-400 */
+        --color-header-to: #f87171; /* red-400 */
+        --color-icon-1: #fbbf24;
+        --color-icon-2: #fca5a5; /* red-300 */
+        --color-border: #ffffff1a;
+        --color-panel-bg: #ffffff0d;
+        --color-shadow: #f59e0b1a; /* amber-500/10 */
+        --color-focus-ring: #f59e0b80;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.16.0",
+    "jszip": "https://aistudiocdn.com/jszip@^3.10.1"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
